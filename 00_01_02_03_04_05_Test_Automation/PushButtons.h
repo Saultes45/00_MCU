@@ -47,9 +47,9 @@ const uint16_t SW_DEBOUNCE_TIME   = 250;    //100 // millisecond button debounci
 //-------------------
 
 //START
-volatile bool flagLS_r  = false; // this flag indicates a change to the main loop
-volatile bool stateLS_r = false; // this flag indicates if the LS is triggered to the main loop
-volatile unsigned long last_interrupt_time_ls_r = 0;
+volatile bool flagSW_start  = false; // this flag indicates a change to the main loop
+volatile bool flagSW_start = false; // this flag indicates if the LS is triggered to the main loop
+volatile unsigned long last_interrupt_time_sw_start = 0;
 
 //CONTINUE
 volatile bool flagLS_l  = false; // this flag indicates a change to the main loop
@@ -57,9 +57,9 @@ volatile bool stateLS_l = false; // this flag indicates if the LS is triggered t
 volatile unsigned long last_interrupt_time_ls_l = 0;
 
 //STOP
-volatile bool flagLS_l  = false; // this flag indicates a change to the main loop
-volatile bool stateLS_l = false; // this flag indicates if the LS is triggered to the main loop
-volatile unsigned long last_interrupt_time_ls_l = 0;
+volatile bool flagSW_stop  = false; // this flag indicates a change to the main loop
+volatile bool flagSW_stop = false; // this flag indicates if the LS is triggered to the main loop
+volatile unsigned long last_interrupt_time_sw_stop = 0;
 
 
 // END OF THE FILE
