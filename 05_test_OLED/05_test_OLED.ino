@@ -49,10 +49,6 @@
 // -------------------------- Defines and Const []--------------------------
 
 
-
-#define SERIAL_VERBOSE // Comment out to remove message to the console (and save some exec time and power)
-
-
 #define LED                         LED_BUILTIN  // digital pin connected to LED, for testing of switch code only
 
 
