@@ -49,7 +49,19 @@ const uint8_t PIN_MOTOR_DIR    = 10; // Digital output 5V
 const uint8_t PIN_MOTOR_ENA    = 12; // Digital output 5V, manual logic
 
 
-const uint8_t stepFactor = 1;
+const uint8_t PIN_MOTOR_CFG_0   = 7; // Digital output 5V - Doesnt matter
+const uint8_t PIN_MOTOR_CFG_1   = 4; // Digital output 5V
+const uint8_t PIN_MOTOR_CFG_2   = 5; // Digital output 5V
+const uint8_t PIN_MOTOR_CFG_3   = 6; // Digital output 5V - Doesnt matter
+
+// Currently soldered
+//CFG0: GND - Chopper off time
+//CFG1: MCU - ustepping 1/2
+//CFG2: MCU - ustepping 2/2
+//CFG3: HiZ - Mode of current
+
+
+const uint8_t stepFactor = 4;
 const uint8_t pulsesPerRevolution = 200;
 
 
@@ -73,12 +85,14 @@ const uint8_t pulsesPerRevolution = 200;
 
 
 // -------------------------- Global variables [2]----------------
-uint16_t nbr_revolutions = 2;
+uint16_t nbr_revolutions = 50;
 
 // Define a stepper and the pins it will use
 AccelStepper stepper(AccelStepper::DRIVER, PIN_MOTOR_STEP, PIN_MOTOR_DIR);
 
 
+
+uint8_t currDirection = 0; 
 
 void      displayStepperSettings  (void);
 
@@ -93,6 +107,17 @@ void setup()
   
   // initialize digital pin PIN_MOTOR_ENA as an output.
   pinMode(PIN_MOTOR_ENA, OUTPUT);
+
+  // set motor configuration
+  pinMode(PIN_MOTOR_CFG_0, OUTPUT); // Doesn't matter
+//  pinMode(PIN_MOTOR_CFG_1, OUTPUT);
+  pinMode(PIN_MOTOR_CFG_2, OUTPUT);
+  //pinMode(PIN_MOTOR_CFG_3, OUTPUT); // Doesn't matter
+  
+  digitalWrite(PIN_MOTOR_CFG_0,LOW);  // Doesn't matter
+//  digitalWrite(PIN_MOTOR_CFG_1,LOW); // SpreadCycle, no ustepping (fullstep)
+  digitalWrite(PIN_MOTOR_CFG_2,HIGH); // SpreadCycle, no ustepping (fullstep)
+  //digitalWrite(PIN_MOTOR_CFG_3,LOW); // Doesn't matter
 
   // Enable the motor (logic inverse)
   digitalWrite(PIN_MOTOR_ENA,PUMP_ENABLE);
@@ -114,9 +139,9 @@ void setup()
 
 
   printDebugln("Setting max speed to :");
-  stepper.setMaxSpeed(10000 * stepFactor);
+  stepper.setMaxSpeed(800 * stepFactor);
   printDebugln("Setting max accel to :");
-  stepper.setAcceleration(100000 * stepFactor);
+  stepper.setAcceleration(400 * stepFactor);
   stepper.moveTo(nbr_revolutions * pulsesPerRevolution * stepFactor);
 
   displayStepperSettings();
@@ -140,7 +165,17 @@ void loop()
   if (stepper.distanceToGo() == 0)
   {
     delay(3000);
-    stepper.moveTo(-stepper.currentPosition());
+    if (currDirection == 0)
+    {
+      currDirection = 1;
+      stepper.moveTo(0); // move back exactly to the start
+      
+    }
+    else
+    {
+      currDirection = 0;
+      stepper.moveTo(nbr_revolutions * pulsesPerRevolution * stepFactor);
+    }
   }
 
   stepper.run();
