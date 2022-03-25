@@ -34,11 +34,14 @@
 // -------------------------- Includes --------------------------
 #include <Wire.h> // for I2C
 
-
+#define pinStepper_ena 12
 
 // -------------------------- SetUp --------------------------
 void setup()
 {
+  pinMode(pinStepper_ena, OUTPUT);
+  digitalWrite(pinStepper_ena, HIGH);
+  
   Wire.begin();
 
   Serial.begin(9600);
