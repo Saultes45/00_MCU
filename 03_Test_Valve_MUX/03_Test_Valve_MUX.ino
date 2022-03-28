@@ -36,8 +36,8 @@
 
 
 // -------------------------- Includes [1] --------------------------
-
-#include "PCF8574.h"
+// Source: RobTillaart/PCF8574 (install via the manager but scroll down to #10, look at author)
+#include "PCF8574.h" // https://www.arduino.cc/reference/en/libraries/pcf8574/
 
 // -------------------------- Defines and Const []--------------------------
 
@@ -246,4 +246,4 @@ void      pinSetUp                (void)
 
 
 
-// END OF FIL
+// END OF FILE
