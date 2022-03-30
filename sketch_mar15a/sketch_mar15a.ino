@@ -7,7 +7,8 @@ void setup(){
 
 }
 
-void loop(){
+void loop()
+{
  
   tone(buzzer, 1000); // Send 1KHz sound signal...
   delay(1000);        // ...for 1 sec
