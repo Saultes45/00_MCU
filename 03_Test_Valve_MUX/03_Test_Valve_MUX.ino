@@ -22,7 +22,7 @@
 *
 * Ressources (Boards + Libraries Manager)
 *
-*For tyhe MUX IC: search "PCF8574" in the library manager (+scroll down) 
+*For the MUX IC: search "PCF8574" in the library manager (+scroll down) 
 * Author: Rob Tillaart
 *
 *
