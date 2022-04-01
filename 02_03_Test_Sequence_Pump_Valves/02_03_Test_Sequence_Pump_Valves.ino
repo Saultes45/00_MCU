@@ -38,32 +38,51 @@
 
 
 // -------------------------- Includes --------------------------
+
+// for pump
 #include <AccelStepper.h>
 
-// Source: RobTillaart/PCF8574 (install via the manager but scroll down to #10, look at author)
-#include "PCF8574.h" // https://www.arduino.cc/reference/en/libraries/pcf8574/
 
-// No need for inclusing "Wire.h"
+// for buzzer
+#include <CuteBuzzerSounds.h> 
 
-#include <CuteBuzzerSounds.h> // for buzzer
+//I2C: MUX / OLED / AMS sperctrometer (not used)
+// No need for inclusing "Wire.h" for OLED nor MUX
 
 // for OLED
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 
+// for MUX
+// Source: RobTillaart/PCF8574 (install via the manager but scroll down to #10, look at author)
+#include "PCF8574.h" // https://www.arduino.cc/reference/en/libraries/pcf8574/
+
 // -------------------------- Defines and Const []--------------------------
 
-// Stepper motor driver pins
+// Sequence
+//----------
+
+#define NBR_FUNCTIONS 6 // Also defines how many valves sequences
+
+// Stepper
+//--------
+
+// Enable logic (active low)
+#define PUMP_ENABLE   LOW
+#define PUMP_DISABLE  HIGH
+
+// Movement pins
 const uint8_t PIN_MOTOR_STEP   = 11; // Digital output 5V
 const uint8_t PIN_MOTOR_DIR    = 10; // Digital output 5V
 const uint8_t PIN_MOTOR_ENA    = 12; // Digital output 5V, manual logic
 
-
+// Param
 const uint8_t PIN_MOTOR_CFG_0   = 7; // Digital output 5V - Doesn't matter
 const uint8_t PIN_MOTOR_CFG_1   = 4; // Digital output 5V
 const uint8_t PIN_MOTOR_CFG_2   = 5; // Digital output 5V
 const uint8_t PIN_MOTOR_CFG_3   = 6; // Digital output 5V - Doesn't matter
 
+// To calculate position
 const uint8_t uStepFactor = 4; // set up by the MCU on the stepper driver
 const uint8_t pulsesPerRevolution = 200; // Dictated by the HW only
 
@@ -71,24 +90,36 @@ const uint16_t interpolationFactor = 256;
 String driverMode                 = "StealthChop";
 
 // Personal MAX limits
-const uint16_t personalMaxAccel = 800; //in pulses/sec so theo NOT dependent on uStepFactor
-const uint16_t personalMaxSpeed = 800; //in pulses/sec so theo NOT dependent on uStepFactor
+const uint16_t personalMaxAccel = 200; //in [pulses/sec^2] so theo NOT dependent on uStepFactor
+const uint16_t personalMaxSpeed = 200; //in [pulses/sec] so theo NOT dependent on uStepFactor
 
-// Personal target 
-const uint16_t targetAccel = personalMaxAccel; //in pulses/sec so theo NOT dependent on uStepFactor
+// dose/clean pump parameters
+// REMOVE THE NEXT LINE
+const uint16_t targetAccel = personalMaxAccel; //in pulses/sec^2 so theo NOT dependent on uStepFactor
 //const uint8_t targetSpeed = 100; //in pulses/sec so theo NOT dependent on uStepFactor
 
-#define PUMP_ENABLE   LOW
-#define PUMP_DISABLE  HIGH
+const uint16_t cleanSpeed = personalMaxSpeed; // Do not use, in [pulses/sec]
+//const uint16_t cleanAccel = 150; // in [pulses/sec^2]
 
+const uint16_t doseSpeed = 10; //  in [pulses/sec]
+//const uint16_t doseAccel = 150; // Do not use, in [pulses/sec^2]
+
+const uint16_t target_nbr_revolutions[NBR_FUNCTIONS] = {5,8,1,1,3,0};
+
+
+
+
+// Valves
+//--------
 #define MUX_ADDRSS 0x20 
-#define NBR_FUNCTIONS 6 // Also defines how many valves sequences
-//                                        F1 - F2 - F3 - F4 - F5 - F6
-const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x42,0xD2,0xA4,0xA8,0x90,0x00};
+//                                             F1 - F2 - F3 - F4 - F5 - F6
+// const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x42,0xD2,0xA4,0xA8,0x90,0x00};
+const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x82,0xD2,0x64,0x68,0x50,0x00};
 
+// Keep track of the sequence
+uint8_t cnt_functions = 0;
 
-// Valves INDX
-//-----------
+// Valves INDX TODO: not actually used
 // Side A
 uint8_t valveAir            = 0;
 uint8_t valveSample         = 1;
@@ -97,24 +128,19 @@ uint8_t valveR2             = 3;
 uint8_t valveRecirculation  = 4;
 uint8_t valveLoopDiscard    = 5; 
 
-
 // Side B
 uint8_t valvePumpDiscard    = 6;
 uint8_t valveLoop           = 7;
 
-// For test purposes
-//---------------------
-
-uint8_t cnt_functions = 0;
 
 // Console
 //--------
 #define SERIAL_DEBUG // Uncomment to let the board print debug statements through the debug port (USB)
-#define SERIAL_BAUDS 9600
+#define SERIAL_BAUDS 115200
 
 // Buzzer
 //-------
-//#define USE_BUZZER
+#define USE_BUZZER
 #define BUZZER_PIN 8
 
 //OLED
@@ -139,11 +165,7 @@ uint8_t cnt_functions = 0;
 
 
 // -------------------------- Global variables [2]----------------
-//uint16_t target_nbr_intrarollers = 1; // nbr intra-roller space to achieve (volume goal)
-//const uint8_t nbr_rollers = 7; // number of rollers on the pump head (for 1 rotation)
-//long target_position = (long)( round( target_nbr_intrarollers / (float)(nbr_rollers) * pulsesPerRevolution * uStepFactor ) );
 
-uint16_t target_nbr_revolutions = 1; // nbr revolutions to achieve (position goal)
 
 // Define a stepper and the pins it will use
 AccelStepper stepper(AccelStepper::DRIVER, PIN_MOTOR_STEP, PIN_MOTOR_DIR);
@@ -157,14 +179,17 @@ bool needPump = false;
 bool nextFunction = false;
 
 
-// -------------------------- Function declaration [2]----------------
+// -------------------------- Function declaration [8]----------------
 void      displayStepperSettings  (void);
 void      pinSetUp                (void);
+
 void      setupValves             (void);
 void      setupStepper            (void);
 void      setupBuzzer             (void);
 void      setupOLED               (void);
+
 void      printFunctionOLED       (void);
+void      printChangeStepOLED     (void);
 
 
 
@@ -223,11 +248,19 @@ void loop() {
   {
     nextFunction = false; //reset the flag
 
+    printChangeStepOLED();
+
     //Debug wait
-    delay(5000);
+    delay(2000);
 
     // With ternary operator
-    (cnt_functions >= NBR_FUNCTIONS) ? cnt_functions = 1: cnt_functions++;
+    // (cnt_functions >= NBR_FUNCTIONS) ? cnt_functions = 1: cnt_functions++;
+    (cnt_functions >= 2) ? cnt_functions = 1: cnt_functions++; // restart at 1, NOT 0!!!!
+
+    #ifdef USE_BUZZER
+      cute.play(S_BUTTON_PUSHED ); // Start of a new step
+    #endif
+    
 
     if (cnt_functions == 1) 
     { // if this is a new cycle
@@ -253,10 +286,16 @@ void loop() {
     switch (cnt_functions) {
       case 0:
         // You should enter here only once, when you have finished set up
+        #ifdef USE_BUZZER
+          cute.play(S_HAPPY_SHORT); // Auto mode start
+        #endif
+        
+
         needPump = false; // let's prime, but not yet
         nextFunction = true; // call for immediate next function
+
       case 1:
-        // Clean A side
+        // F1-Clean A side
         needPump = true; // accel + max speed 
         nextFunction = false; // set after the pump movement
 
@@ -268,36 +307,78 @@ void loop() {
         // Wait for the locking in place
         delay(500);
 
+        printDebug("Number of rotations to achieve: ");
+        printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
 
         printDebug("Starting the motor to ");
-        printDebug(-1 * target_nbr_revolutions * pulsesPerRevolution * uStepFactor);
+        printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
         printDebug(" ... ");
         // Start the pump TODO: optimise
         // move() is long relative
         // moveTo() is long absolute
-        stepper.move(-1 * target_nbr_revolutions * pulsesPerRevolution * uStepFactor);
+        stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
         printDebugln("done");
 
         break;
 
       case 2:
-        needPump = false; // let's prime, but not yet
-        nextFunction = true; // call for immediate next function
+        // F2-Clean Loop
+        needPump = true; // accel + max speed 
+        nextFunction = false; // set after the pump movement
+
+        printDebug("Enabling the motor...");
+        // Enable the motor (inverse logic)
+        digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+        printDebugln("done");
+
+        // Wait for the locking in place
+        delay(500);
+
+        printDebug("Number of rotations to achieve: ");
+        printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+
+        printDebug("Starting the motor to ");
+        printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+        printDebug(" ... ");
+        // Start the pump TODO: optimise
+        // move() is long relative
+        // moveTo() is long absolute
+        stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+        printDebugln("done");
         break;
       case 3:
-        needPump = false; // let's prime, but not yet
+        // F3-Dose R1
+        needPump = false; // 
         nextFunction = true; // call for immediate next function
         break;
       case 4:
-        needPump = false; // let's prime, but not yet
+        // F4-Dose R2
+        needPump = false; // 
         nextFunction = true; // call for immediate next function
         break;
       case 5:
-        needPump = false; // let's prime, but not yet
+        // F5-Mix
+        needPump = false; // 
         nextFunction = true; // call for immediate next function
         break;
       case 6:
-        needPump = false; // let's prime, but not yet
+        // F6-Measure
+        #ifdef USE_BUZZER
+          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
+          delay(1000);
+          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
+          delay(1000);
+          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
+          delay(1000);
+          cute.play(S_OHOOH2        ); // Done for colorimeter test  AND Set up start
+        #endif
+       
+        
+        needPump = false; // 
         nextFunction = true; // call for immediate next function
         break;
       default: // code to be executed if n doesn't match any cases
@@ -326,8 +407,8 @@ void loop() {
         // TODO: display how much time it took to perform the movement
 
         #ifdef USE_BUZZER
-        // The motor stops
-        cute.play(S_MODE3);
+          // The motor stops
+          cute.play(S_MODE3);
         #endif
       }
     }
@@ -421,8 +502,9 @@ void setupStepper(void) {
   // Stepper accel + pos target
   //----------------------------
   stepper.setAcceleration(targetAccel * uStepFactor);
-  // do NOT set the speed with setSpeed, it is ONLY for
-  stepper.moveTo(target_nbr_revolutions * pulsesPerRevolution * uStepFactor);
+  // do NOT set the speed with "setSpeed", it is ONLY for "runSpeed()"
+  // stepper.moveTo(target_nbr_revolutions * pulsesPerRevolution * uStepFactor);  // absolute
+  stepper.moveTo(0); // absolute
 
   // Stepper display settings
   //-------------------------
@@ -527,6 +609,36 @@ void printFunctionOLED(void) {
   display.print("F-");
   display.println(cnt_functions);
   
+  display.display();
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void printChangeStepOLED(void) {
+
+
+  // Clear the buffer
+  display.clearDisplay();
+
+  // Follow (2022-02-22)
+  //https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
+
+  // Display text "F-"
+  //------------------
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  
+  //line1
+  display.setCursor(10, 20);
+  // Display static text
+  display.print("Starting a");
+  
+  //line 2
+  display.setCursor(10, 50);
+  // Display static text
+  display.print("new function");
+
+
   display.display();
 
 } // END OF THE FUNCTION
