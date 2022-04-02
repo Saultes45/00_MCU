@@ -59,7 +59,7 @@
 // Sequence
 //----------
 
-#define NBR_FUNCTIONS 6 // Also defines how many valves sequences
+#define NBR_FUNCTIONS 9 // Also defines how many valves sequences
 
 
 // RGB LED for colorimeter
@@ -74,14 +74,40 @@ const uint8_t LED_BLU_PIN   = 45; // Digital output 5V - PWM capable
 //--------
 
 // in StepperPeristaltic.h now
-const uint16_t target_nbr_revolutions[NBR_FUNCTIONS] = {60,80,1,1,3,0};
+const uint16_t target_nbr_revolutions[NBR_FUNCTIONS] = {
+  80, // F1 - Clean loop
+  60, // F2 - Clean A side
+  01, // F3 - Dose R1
+  01, // F4 - Dose R2
+  03, // F5 - Mix
+  00, // F6 - Measure
+  04, // F7 - Clean Air
+  05, // F8 - Clean R1
+  05, // F9 - Clean R2
+};
 
 // Valves
 //--------
 
-//                                             F1 - F2 - F3 - F4 - F5 - F6
+/* Last sequence is present is google sheets:
+* ANTS Valve MUX - Inv+New - Last good one: 2022-04-03
+* https://docs.google.com/spreadsheets/d/1jg5QQMtV5aC1dkNfdmuq53zsLn5vYC0wE9LcEtVTIi8/edit#gid=686154229
+*/
+
+//                                             F1 - F2 - F3 - F4 - F5 - F6 - F7- F8- F9
 // const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x42,0xD2,0xA4,0xA8,0x90,0x00};
-const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x82,0x62,0x64,0x68,0x50,0x00};
+//const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x82,0x62,0x64,0x68,0x50,0x00};
+const uint8_t valveMuxArray[NBR_FUNCTIONS] = {
+  0x62, // F1 - Clean loop
+  0x82, // F2 - Clean A side
+  0x64, // F3 - Dose R1
+  0x68, // F4 - Dose R2
+  0x50, // F5 - Mix
+  0x00, // F6 - Measure
+  0x81, // F7 - Clean Air
+  0x84, // F8 - Clean R1
+  0x88, // F9 - Clean R2
+};
 
 // Keep track of the sequence
 uint8_t cnt_functions = 0;
