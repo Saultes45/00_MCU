@@ -39,9 +39,6 @@
 // for pump
 #include "StepperPeristaltic.h" // personal
 
-// for buzzer
-#include <CuteBuzzerSounds.h> 
-
 //I2C: MUX / OLED / AMS sperctrometer (not used)
 // No need for inclusing "Wire.h" for OLED nor MUX
 
@@ -53,6 +50,9 @@
 
 // for debug via console
 #include "ConsoleUSB.h"
+
+// for bizzer debug
+#include "signalBuzzer.h"
 
 // -------------------------- Defines and Const []--------------------------
 
@@ -89,8 +89,8 @@ uint8_t cnt_functions = 0;
 
 // Buzzer
 //-------
-//#define USE_BUZZER
-#define BUZZER_PIN 8
+// in "signalBuzzer.h"
+
 
 //OLED
 //----
