@@ -29,8 +29,12 @@
 * ========================================
 */
 
+// -------------------------- Includes[1] --------------------------
+
+#include <AccelStepper.h> // Mike McCauley
 
 
+// -------------------------- Defines and Const [19]--------------------------
 
 // Enable logic (active low)
 #define PUMP_ENABLE   LOW
@@ -55,8 +59,8 @@ const int interpolationFactor = 256;
 String    driverMode          = "StealthChop";
 
 // Personal MAX limits
-const uint16_t personalMaxAccel = 1300; //in [pulses/sec^2] so theo NOT dependent on uStepFactor
-const uint16_t personalMaxSpeed = 1300; //in [pulses/sec] so theo NOT dependent on uStepFactor
+const uint16_t personalMaxAccel = 900; //in [pulses/sec^2] so theo NOT dependent on uStepFactor
+const uint16_t personalMaxSpeed = 900; //in [pulses/sec] so theo NOT dependent on uStepFactor
 
 // dose/clean pump parameters
 // REMOVE THE NEXT LINE
@@ -73,3 +77,10 @@ const uint16_t mixAccel = (uint16_t)((float)personalMaxAccel * 2.0/3.0); // in [
 const uint16_t doseSpeed = 10; //  in [pulses/sec]
 //const uint16_t doseAccel = 150; // Do not use, in [pulses/sec^2]
 
+// -------------------------- Global variables [1]----------------
+
+// Define a stepper and the pins it will use
+AccelStepper stepper(AccelStepper::DRIVER, PIN_MOTOR_STEP, PIN_MOTOR_DIR);
+
+
+// END OF THE FILE
