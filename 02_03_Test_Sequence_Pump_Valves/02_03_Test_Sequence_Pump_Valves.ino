@@ -29,20 +29,15 @@
 * ========================================
 */
 
-// SOURCE:
-// Make a single stepper bounce from one limit to another
-//
-// Copyright (C) 2012 Mike McCauley
-// $Id: Random.pde,v 1.1 2011/01/05 01:51:01 mikem Exp mikem $
-
 
 
 // -------------------------- Includes --------------------------
 
-// for pump
-#include <AccelStepper.h>
-#include "StepperPeristaltic.h" // personal
+// for all the sequencing
+#include "global.h"
 
+// for pump
+#include "StepperPeristaltic.h" // personal
 
 // for buzzer
 #include <CuteBuzzerSounds.h> 
@@ -51,12 +46,13 @@
 // No need for inclusing "Wire.h" for OLED nor MUX
 
 // for OLED
-#include <Wire.h>
-#include <Adafruit_SSD1306.h>
+#include "displayOLED.h" 
 
 // for MUX
-// Source: RobTillaart/PCF8574 (install via the manager but scroll down to #10, look at author)
-#include "PCF8574.h" // https://www.arduino.cc/reference/en/libraries/pcf8574/
+#include "muxValves.h"
+
+// for debug via console
+#include "ConsoleUSB.h"
 
 // -------------------------- Defines and Const []--------------------------
 
@@ -80,11 +76,9 @@ const uint8_t LED_BLU_PIN   = 45; // Digital output 5V - PWM capable
 // in StepperPeristaltic.h now
 const uint16_t target_nbr_revolutions[NBR_FUNCTIONS] = {60,80,1,1,3,0};
 
-
-
 // Valves
 //--------
-#define MUX_ADDRSS 0x20 
+
 //                                             F1 - F2 - F3 - F4 - F5 - F6
 // const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x42,0xD2,0xA4,0xA8,0x90,0x00};
 const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x82,0x62,0x64,0x68,0x50,0x00};
@@ -92,24 +86,6 @@ const uint8_t valveMuxArray[NBR_FUNCTIONS] = {0x82,0x62,0x64,0x68,0x50,0x00};
 // Keep track of the sequence
 uint8_t cnt_functions = 0;
 
-// Valves INDX TODO: not actually used
-// Side A
-uint8_t valveAir            = 0;
-uint8_t valveSample         = 1;
-uint8_t valveR1             = 2;
-uint8_t valveR2             = 3;
-uint8_t valveRecirculation  = 4;
-uint8_t valveLoopDiscard    = 5; 
-
-// Side B
-uint8_t valvePumpDiscard    = 6;
-uint8_t valveLoop           = 7;
-
-
-// Console
-//--------
-#define SERIAL_DEBUG // Uncomment to let the board print debug statements through the debug port (USB)
-#define SERIAL_BAUDS 115200
 
 // Buzzer
 //-------
@@ -118,53 +94,11 @@ uint8_t valveLoop           = 7;
 
 //OLED
 //----
-#define USE_OLED
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET    -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-#ifdef USE_OLED
-  Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-#endif
-
-// -------------------------- Macros [1] --------------------------
-#ifdef SERIAL_DEBUG
-  #define printDebug(message)   Serial.print(message)
-  #define printDebugln(message) Serial.println(message)
-#else
-  #define printDebug(message) // Leave the macro empty
-  #define printDebugln(message) // Leave the macro empty
-#endif
+// in "displayOLED.h" now
 
 
-// -------------------------- Global variables [2]----------------
-
-
-// Define a stepper and the pins it will use
-AccelStepper stepper(AccelStepper::DRIVER, PIN_MOTOR_STEP, PIN_MOTOR_DIR);
-
-// I2C 8-pin mux for valve driver
-PCF8574 VALVE_MUX(MUX_ADDRSS);
-
-// Sequencing
-//------------
-bool needPump = false;
-bool nextFunction = false;
-
-
-// -------------------------- Function declaration [8]----------------
-void      displayStepperSettings  (void);
-void      pinSetUp                (void);
-
-void      setupValves             (void);
-void      setupStepper            (void);
-void      setupBuzzer             (void);
-void      setupOLED               (void);
-
-void      printFunctionOLED       (void);
-void      printChangeStepOLED     (void);
-
-void      functionMix             (void);
+// -------------------------- Function declaration [8] ----------------
+// in global.h now
 
 
 
@@ -189,6 +123,8 @@ void setup() {
   printDebugln("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
   printDebugln("Starting a new session");
   printDebugln("Welcome to the Stepper+Valve test");
+
+  printDebugln(mixAccel);
 
   //  printDebug("Initialisation...");
   //  printDebugln("done");
@@ -661,6 +597,54 @@ void functionMix(void) {
   printDebug("Setting target stepper acceleration to ");
   printDebug(mixAccel * uStepFactor);
   printDebug(" [full steps/s^2] ..."); // TODO: check, probably u-steps
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/55
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/55
+  //-------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+
+
+//******************************************************************************************
+void functionDoseR1(void) {
+
+  // Flags set up - 1/55
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for dosing (NO accel + slow) - 2/55
+  //--------------------------------------------------------
+  printDebug("Setting target stepper speed to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [full steps/s] ..."); // TODO: check, probably u-steps
   stepper.setAcceleration(mixAccel * uStepFactor);
   printDebugln("done");
 
