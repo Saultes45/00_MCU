@@ -39,7 +39,7 @@
 
 
 // -------------------------- Defines and Const []--------------------------
-//#define USE_BUZZER
+#define USE_BUZZER // Comment to remove the buzzer sounds
 #define BUZZER_PIN 8
 
 
