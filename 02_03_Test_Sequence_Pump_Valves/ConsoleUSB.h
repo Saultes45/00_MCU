@@ -31,6 +31,15 @@
 
 // -------------------------- Includes[] --------------------------
 
+
+// -------------------------- Defines and Const []--------------------------
+
+// Console
+//--------
+#define SERIAL_DEBUG // Uncomment to let the board print debug statements through the debug port (USB)
+#define SERIAL_BAUDS 115200
+
+
 // -------------------------- Macros [1] --------------------------
 #ifdef SERIAL_DEBUG
   #define printDebug(message)   Serial.print(message)
@@ -41,12 +50,7 @@
 #endif
 
 
-// -------------------------- Defines and Const []--------------------------
 
-// Console
-//--------
-#define SERIAL_DEBUG // Uncomment to let the board print debug statements through the debug port (USB)
-#define SERIAL_BAUDS 115200
 
 
 
