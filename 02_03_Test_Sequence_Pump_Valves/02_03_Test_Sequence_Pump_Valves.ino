@@ -51,24 +51,20 @@
 // for debug via console
 #include "ConsoleUSB.h"
 
-// for bizzer debug
+// for buzzer debug
 #include "signalBuzzer.h"
+
+// for colorimeter
+#include "taosColorimeter.h"
 
 // -------------------------- Defines and Const []--------------------------
 
 // Sequence
 //----------
 
-#define NBR_FUNCTIONS 9 // Also defines how many valves sequences
-
-
-// RGB LED for colorimeter
-//-------------------------
-
-//#define USE_RGB_LED
-const uint8_t LED_RED_PIN   = 46; // Digital output 5V - PWM capable
-const uint8_t LED_GRN_PIN   = 44; // Digital output 5V - PWM capable
-const uint8_t LED_BLU_PIN   = 45; // Digital output 5V - PWM capable
+#define NBR_FUNCTIONS       9 // Also defines how many valves sequences
+#define NBR_FUNCTIONS_OP    6 // Limits the loop to the operational functions
+#define NBR_FUNCTIONS_MAINT 3 // Limits the loop to the maintenence functions
 
 // Stepper
 //--------
@@ -76,14 +72,14 @@ const uint8_t LED_BLU_PIN   = 45; // Digital output 5V - PWM capable
 // in StepperPeristaltic.h now
 const uint16_t target_nbr_revolutions[NBR_FUNCTIONS] = {
   80, // F1 - Clean loop
-  60, // F2 - Clean A side
-  01, // F3 - Dose R1
-  01, // F4 - Dose R2
-  03, // F5 - Mix
+  70, // F2 - Clean A side
+  02, // F3 - Dose R1
+  02, // F4 - Dose R2
+  70, // F5 - Mix
   00, // F6 - Measure
-  04, // F7 - Clean Air
-  05, // F8 - Clean R1
-  05, // F9 - Clean R2
+  20, // F7 - Clean Air
+  20, // F8 - Clean R1
+  20, // F9 - Clean R2
 };
 
 // Valves
@@ -135,27 +131,16 @@ void setup() {
 
   #ifdef USE_BUZZER
   setupBuzzer();
-  // Set up starts
-  cute.play(S_OHOOH2);
   #endif
 
-  #ifdef SERIAL_DEBUG
-  Serial.begin(SERIAL_BAUDS);
-  while (!Serial) // Wait here until the connection with the computer has been established
-    #endif
-
-  delay(1000);
-
-  printDebugln("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
-  printDebugln("Starting a new session");
-  printDebugln("Welcome to the Stepper+Valve test");
-
-  printDebugln(mixAccel);
+  setupConsole();
 
   //  printDebug("Initialisation...");
   //  printDebugln("done");
 
   setupOLED();
+  infoDisplayOLED();
+  delay(5000); // give us the time to read
   setupValves();
   setupStepper();
 
@@ -165,10 +150,8 @@ void setup() {
   printDebugln("---------------------------------"); // Indicates the end of the setup
 
   #ifdef USE_BUZZER
-
   // Set up is done
   cute.play(S_MODE3);
-
   #endif
 
 }
@@ -177,20 +160,49 @@ void setup() {
 // -------------------------- Loop --------------------------
 void loop() {
 
-  // Check if we have finished the previous function before we can go to the next
-  //------------------------------------------------------------------------------
+
+  // Check if a stepper movement is needed (must be as fast as possible)
+  if (needPump) {
+    
+    stepper.run(); // non blocking
+
+    if (stepper.distanceToGo() == 0) { // check if the pump movement is finished
+      nextFunction  = true; // go to the next function
+      needPump      = false; // Dno not do any pump movement
+
+      printDebugln("Pump movement done!");
+
+      printDebug("Disabling the motor...");
+      // Disable the motor (inverse logic)
+      digitalWrite(PIN_MOTOR_ENA, PUMP_DISABLE); // remove for more precision
+      printDebugln("done");
+
+      // TODO: display how much time it took to perform the movement
+
+      #ifdef USE_BUZZER
+        // The motor stops
+        cute.play(S_MODE3);
+      #endif
+    }
+  } // if needPump
+
+
+  // Check if we have finished the previous function before we can execute the next
+  //--------------------------------------------------------------------------------
   if (nextFunction) 
   {
     nextFunction = false; //reset the flag
 
     printChangeStepOLED();
 
-    //Debug wait
-    delay(2000);
+    // //Debug wait
+    // delay(2000);
 
     // With ternary operator
-    // (cnt_functions >= NBR_FUNCTIONS) ? cnt_functions = 1: cnt_functions++;
-    (cnt_functions >= 2) ? cnt_functions = 1: cnt_functions++; // restart at 1, NOT 0!!!!
+    // restart at 1, NOT 0!!!!
+    // (cnt_functions >= NBR_FUNCTIONS) ? cnt_functions = 1: cnt_functions++; // all
+    (cnt_functions >= NBR_FUNCTIONS_OP) ? cnt_functions = 1: cnt_functions++; //OP
+    // (cnt_functions >= NBR_FUNCTIONS_MAINT) ? cnt_functions = 7: cnt_functions++; // Maintenece
 
     #ifdef USE_BUZZER
       cute.play(S_BUTTON_PUSHED ); // Start of a new step
@@ -225,91 +237,24 @@ void loop() {
           cute.play(S_HAPPY_SHORT); // Auto mode start
         #endif
         
-
         needPump = false; // let's prime, but not yet
         nextFunction = true; // call for immediate next function
 
       case 1:
-        // F1-Clean A side
-
-        // Flags set up - 1/55
-        //---------------------
-        needPump      = true; // accel + max speed 
-        nextFunction  = false; // set after the pump movement
-
-        // Set up the motor for a clean (accel + fast) - 2/55
-        //---------------------------------------------------
-        printDebug("Setting target stepper acceleration to ");
-        printDebug(cleanAccel * uStepFactor);
-        printDebug(" [full steps/s^2] ..."); // TODO: check, probably u-steps
-        stepper.setAcceleration(cleanAccel * uStepFactor);
-        printDebugln("done");
-
-        
-        //displayStepperSettings(); // check the settings
-
-        // Enable the motor - 3/55
-        //------------------------
-        printDebug("Enabling the motor...");
-        digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
-        printDebugln("done");
-
-        // Wait for the locking in place
-        delay(500);
-
-        printDebug("Number of rotations to achieve: ");
-        printDebugln(target_nbr_revolutions[cnt_functions-1]);
-
-
-        // Give the stepper a target position - 4/55
-        //-------------------------------------------
-        printDebug("Starting the motor to ");
-        printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
-        printDebug(" ... ");
-        // Start the pump TODO: optimise
-        // move() is long relative
-        // moveTo() is long absolute
-        stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
-        printDebugln("done");
-
+        // F1-Clean loop
+        functionCleanLoop();
         break;
-
       case 2:
-        // F2-Clean Loop
-        needPump = true; // accel + max speed 
-        nextFunction = false; // set after the pump movement
-
-        printDebug("Enabling the motor...");
-        // Enable the motor (inverse logic)
-        digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
-        printDebugln("done");
-
-        // Wait for the locking in place
-        delay(500);
-
-        printDebug("Number of rotations to achieve: ");
-        printDebugln(target_nbr_revolutions[cnt_functions-1]);
-
-
-
-        printDebug("Starting the motor to ");
-        printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
-        printDebug(" ... ");
-        // Start the pump TODO: optimise
-        // move() is long relative
-        // moveTo() is long absolute
-        stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
-        printDebugln("done");
+        // F2-Clean A side
+        functionCleanASide();
         break;
       case 3:
         // F3-Dose R1
-        needPump = false; // 
-        nextFunction = true; // call for immediate next function
+        functionDoseR1();
         break;
       case 4:
         // F4-Dose R2
-        needPump = false; // 
-        nextFunction = true; // call for immediate next function
+        functionDoseR2();
         break;
       case 5:
         // F5-Mix
@@ -317,53 +262,24 @@ void loop() {
         break;
       case 6:
         // F6-Measure
-        #ifdef USE_BUZZER
-          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
-          delay(1000);
-          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
-          delay(1000);
-          cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
-          delay(1000);
-          cute.play(S_OHOOH2        ); // Done for colorimeter test  AND Set up start
-        #endif
-       
-        
-        needPump = false; // 
-        nextFunction = true; // call for immediate next function
+        functionMeasure();
         break;
-      default: // code to be executed if n doesn't match any cases
+      case 7:
+        // F7-Clean Air
+        functionCleanAir();
         break;
-      }
-
-
+      case 8:
+        // F8-Clear R1
+        functionCleanR1();
+        break;
+      case 9:
+        // F9-Clean R2
+        functionCleanR2();
+        break;      
+      default: // code to be executed if "nextFunction" doesn't match any cases
+        break;
+    } //switch (cnt_functions)
   } // nextFunction
-  else // we keep on the same function, we might be waiting for the pump to finish
-  {
-    if (needPump) {
-
-      stepper.run(); // non blocking
-
-      if (stepper.distanceToGo() == 0) { // check if the pump movement is finished
-        nextFunction = true; // go to the next function
-        needPump = false;
-
-        printDebugln("Pump movement done!");
-
-        printDebug("Disabling the motor...");
-        // Disable the motor (inverse logic)
-        digitalWrite(PIN_MOTOR_ENA, PUMP_DISABLE); // remove for more precision
-        printDebugln("done");
-
-        // TODO: display how much time it took to perform the movement
-
-        #ifdef USE_BUZZER
-          // The motor stops
-          cute.play(S_MODE3);
-        #endif
-      }
-    }
-  }
-
 
 } // END OF LOOP
 
@@ -421,7 +337,7 @@ void pinSetUp(void) {
   #endif
 
 
-} // END OF FUNCTION
+} // END OF THE FUNCTION
 
 //******************************************************************************************
 void setupValves(void) {
@@ -526,6 +442,25 @@ void displayStepperSettings(void) {
 void setupBuzzer(void) {
   cute.init(BUZZER_PIN);
 
+  // "setup" function starts
+  cute.play(S_OHOOH2);
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void setupConsole(void) {
+
+  #ifdef SERIAL_DEBUG
+  Serial.begin(SERIAL_BAUDS);
+  while (!Serial) // Wait here until the connection with the computer has been established
+  #endif
+
+  delay(1000);
+
+  printDebugln("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%");
+  printDebugln("Starting a new session");
+  printDebugln("Welcome to the Stepper+Valve test");
+
 } // END OF THE FUNCTION
 
 //******************************************************************************************
@@ -541,13 +476,41 @@ void setupOLED(void) {
   // Follow (2022-02-22)
   //https://randomnerdtutorials.com/guide-for-oled-display-with-arduino/
 
-  // Display text “Valve Test”
+  // Display welcome text
   //------------------------------
   display.setTextSize(2);
   display.setTextColor(WHITE);
   display.setCursor(5, 20);
   // Display static text
-  display.println("Valve Test");
+  display.println("Welcome");
+  display.display();
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void infoDisplayOLED(void) {
+  
+  // Clear the buffer
+  display.clearDisplay();
+
+
+  // Display info
+  //--------------
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(5, 15);
+  // Display static text
+  display.println("Valve test");
+
+  display.setCursor(5, 40);
+  // Display static text
+  display.println("Version");
+
+  display.setCursor(90, 40);
+  // Display static text
+  display.println(codeVersion);
+
+
   display.display();
 
 } // END OF THE FUNCTION
@@ -566,7 +529,7 @@ void printFunctionOLED(void) {
   //------------------
   display.setTextSize(3);
   display.setTextColor(WHITE);
-  display.setCursor(5, 20);
+  display.setCursor(40, 30);
   // Display static text
   display.print("F-");
   display.println(cnt_functions);
@@ -601,7 +564,7 @@ void printChangeStepOLED(void) {
   display.print("a new");
   
   //line 2
-  display.setCursor(10, 50);
+  display.setCursor(10, 45);
   // Display static text
   display.print("function");
 
@@ -611,25 +574,25 @@ void printChangeStepOLED(void) {
 } // END OF THE FUNCTION
 
 //******************************************************************************************
-void functionMix(void) {
+void functionCleanASide(void) {
 
-  // Flags set up - 1/55
+  // Flags set up - 1/4
   //---------------------
   needPump      = true; // accel + max speed 
   nextFunction  = false; // set after the pump movement
 
-  // Set up the motor for a mix (accel + fast) - 2/55
-  //--------------------------------------------------------
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
   printDebug("Setting target stepper acceleration to ");
   printDebug(mixAccel * uStepFactor);
-  printDebug(" [full steps/s^2] ..."); // TODO: check, probably u-steps
+  printDebug(" [micro-steps/s^2] ...");
   stepper.setAcceleration(mixAccel * uStepFactor);
   printDebugln("done");
 
   
   //displayStepperSettings(); // check the settings
 
-  // Enable the motor - 3/55
+  // Enable the motor - 3/4
   //------------------------
   printDebug("Enabling the motor...");
   digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
@@ -642,8 +605,8 @@ void functionMix(void) {
   printDebugln(target_nbr_revolutions[cnt_functions-1]);
 
 
-  // Give the stepper a target position - 4/55
-  //-------------------------------------------
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
   printDebug("Starting the motor to ");
   printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
   printDebug(" ... ");
@@ -656,28 +619,124 @@ void functionMix(void) {
 
 } // END OF THE FUNCTION
 
+//******************************************************************************************
+void functionCleanLoop(void) {
 
+  // Flags set up - 1/4
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
+  printDebug("Setting target stepper acceleration to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void functionMix(void) {
+
+  // Flags set up - 1/4
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
+  printDebug("Setting target stepper acceleration to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
 
 //******************************************************************************************
 void functionDoseR1(void) {
 
-  // Flags set up - 1/55
-  //---------------------
-  needPump      = true; // accel + max speed 
+  // Flags set up - 1/4
+  //-------------------
+  needPump      = true; // NO accel + slow const speed 
   nextFunction  = false; // set after the pump movement
 
-  // Set up the motor for dosing (NO accel + slow) - 2/55
-  //--------------------------------------------------------
-  printDebug("Setting target stepper speed to ");
-  printDebug(mixAccel * uStepFactor);
-  printDebug(" [full steps/s] ..."); // TODO: check, probably u-steps
-  stepper.setAcceleration(mixAccel * uStepFactor);
+  // Set up the motor for dosing (NO accel + slow) - 2/4
+  //-----------------------------------------------------
+  printDebug("Setting target stepper accel to "); //TODO : actually implement const speed
+  printDebug(doseAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(doseAccel * uStepFactor);
   printDebugln("done");
+  
+  //printDebug("Setting target stepper speed (no accel) to ");
+  //printDebug(doseSpeed * uStepFactor);
+  //printDebug(" [micro-steps/s] ...");
+  //stepper.setSpeed(doseSpeed * uStepFactor);
+  //printDebugln("done");
 
   
   //displayStepperSettings(); // check the settings
 
-  // Enable the motor - 3/55
+  // Enable the motor - 3/4
   //------------------------
   printDebug("Enabling the motor...");
   digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
@@ -690,8 +749,8 @@ void functionDoseR1(void) {
   printDebugln(target_nbr_revolutions[cnt_functions-1]);
 
 
-  // Give the stepper a target position - 4/55
-  //-------------------------------------------
+  // Give the stepper a target position - 4/4
+  //-----------------------------------------
   printDebug("Starting the motor to ");
   printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
   printDebug(" ... ");
@@ -704,5 +763,216 @@ void functionDoseR1(void) {
 
 } // END OF THE FUNCTION
 
+//******************************************************************************************
+void functionDoseR2(void) {
+
+  // Flags set up - 1/4
+  //-------------------
+  needPump      = true; // NO accel + slow const speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for dosing (NO accel + slow) - 2/4
+  //-----------------------------------------------------
+  printDebug("Setting target stepper accel to "); //TODO : actually implement const speed
+  printDebug(doseAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(doseAccel * uStepFactor);
+  printDebugln("done");
+  
+  //printDebug("Setting target stepper speed (no accel) to ");
+  //printDebug(doseSpeed * uStepFactor);
+  //printDebug(" [micro-steps/s] ...");
+  //stepper.setSpeed(doseSpeed * uStepFactor);
+  //printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //-----------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void functionCleanAir(void) {
+
+  // Flags set up - 1/4
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
+  printDebug("Setting target stepper acceleration to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void functionCleanR1(void) {
+
+  // Flags set up - 1/4
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
+  printDebug("Setting target stepper acceleration to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void functionCleanR2(void) {
+
+  // Flags set up - 1/4
+  //---------------------
+  needPump      = true; // accel + max speed 
+  nextFunction  = false; // set after the pump movement
+
+  // Set up the motor for a mix (accel + fast) - 2/4
+  //-------------------------------------------------
+  printDebug("Setting target stepper acceleration to ");
+  printDebug(mixAccel * uStepFactor);
+  printDebug(" [micro-steps/s^2] ...");
+  stepper.setAcceleration(mixAccel * uStepFactor);
+  printDebugln("done");
+
+  
+  //displayStepperSettings(); // check the settings
+
+  // Enable the motor - 3/4
+  //------------------------
+  printDebug("Enabling the motor...");
+  digitalWrite(PIN_MOTOR_ENA, PUMP_ENABLE); // remove for more precision
+  printDebugln("done");
+
+  // Wait for the locking in place
+  delay(500);
+
+  printDebug("Number of rotations to achieve: ");
+  printDebugln(target_nbr_revolutions[cnt_functions-1]);
+
+
+  // Give the stepper a target position - 4/4
+  //------------------------------------------
+  printDebug("Starting the motor to ");
+  printDebug(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebug(" ... ");
+  // Start the pump TODO: optimise
+  // move() is long relative
+  // moveTo() is long absolute
+  stepper.move(-1 * (long)target_nbr_revolutions[cnt_functions-1] * (long)pulsesPerRevolution * (long)uStepFactor);
+  printDebugln("done");
+
+
+} // END OF THE FUNCTION
+
+//******************************************************************************************
+void functionMeasure(void) {
+
+	uint8_t cnt_wait = 0;
+	for (cnt_wait = 0; cnt_wait < COLORIMETER_MEASURE_WAIT_S; cnt_wait++)
+	{
+	  #ifdef USE_BUZZER
+		cute.play(S_MODE3         ); // Ready for colorimeter test AND Set up done
+	  #endif
+    delay(1000);// wait by steps of 1s
+	}
+	
+	#ifdef USE_BUZZER
+		cute.play(S_OHOOH2        ); // Done for colorimeter test  AND Set up start
+	#endif
+
+	needPump = false; // 
+	nextFunction = true; // call for immediate next function
+
+
+} // END OF THE FUNCTION
 
 // END OF THE FILE
