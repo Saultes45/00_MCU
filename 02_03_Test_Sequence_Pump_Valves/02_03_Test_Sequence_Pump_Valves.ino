@@ -154,6 +154,8 @@ void setup() {
   cute.play(S_MODE3);
   #endif
 
+  lastTime = millis(); // keep track of time
+
 }
 
 
@@ -191,6 +193,14 @@ void loop() {
   //--------------------------------------------------------------------------------
   if (nextFunction) 
   {
+
+    currentTime = millis();
+    elapsedTime = currentTime - lastTime;
+    printDebug("Last function took: ");
+    printDebug(elapsedTime);
+    printDebugln("ms to execute");
+    lastTime = currentTime;
+
     nextFunction = false; //reset the flag
 
     printChangeStepOLED();
