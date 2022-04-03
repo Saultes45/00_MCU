@@ -42,6 +42,12 @@ const uint8_t COLORIMETER_MEASURE_WAIT_S = 3; // how long to wait for the colori
 bool needPump 		= false;
 bool nextFunction 	= false;
 
+// Time checking
+//--------------
+unsigned long lastTime    = 0u;
+unsigned long currentTime = 0u;
+unsigned long elapsedTime = 0u;
+
 // -------------------------- Function declaration [8] ----------------
 void      displayStepperSettings  (void);
 void      pinSetUp                (void);
