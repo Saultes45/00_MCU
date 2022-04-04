@@ -420,7 +420,7 @@ void displayStepperSettings(void) {
   printDebug("Current mode: ");
   printDebugln(driverMode);
 
-  Serial.println("---------------------------------");
+  printDebugln("---------------------------------");
 
   //MAX
   printDebug("Current max speed: ");
