@@ -8,6 +8,9 @@ F:\Dropbox\53_AutomatedNitrateTitration\00_DesignRessources\00_MCU
 03 Multiplexer
 04 Flow Sensor
 05 OLED
+06 Colorimeter
+90 Logic/Sequence
+
 
 
 
