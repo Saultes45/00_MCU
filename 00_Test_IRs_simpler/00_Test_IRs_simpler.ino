@@ -1,14 +1,14 @@
 /* ========================================
 *
-* Copyright University of Auckland Ltd, 2021
+* Copyright Nathanael Esnault, 2022
 * All Rights Reserved
 * UNPUBLISHED, LICENSED SOFTWARE.
 *
 * Metadata
-* Written by    : Nathanaël Esnault
-* Verified by   : Nathanaël Esnault
-* Creation date : 2021-07-15
-* Version       : 0.1 (finished on 2021-..-..)
+* Written by    : Nathanael Esnault (Saultes45)
+* Verified by   : N/A
+* Creation date : 2022-04-03 
+* Version       : 0.1 (finished on ...)
 * Modifications :
 * Known bugs    :
 *
@@ -24,182 +24,170 @@
 *
 * TODO
 *
-* ========================================
+*
+* Terminology
+* 
+*
 */
 
-// -------------------------- Includes --------------------------
-#define USE_TC3
 
 
-#ifdef USE_TC3
-#include <TimerTC3.h>
-#else
-#include <TimerTCC0.h>
-#endif
+// -------------------------- Includes [0] --------------------------
+//#include <Arduino.h>
 
-// -------------------------- Defines --------------------------
+
+// -------------------------- Defines and Const []--------------------------
 
 
 #define CONSOLE_BAUD_RATE             115200  // Baudrate in [bauds] for serial communication to the console
 
-#define PIN_TOGGLE_MODE  8        // Can be any I/O pin from 0 to 10
-#define DEBOUNCE_TIME 50 // millisecond button debouncing time
-// Modes
-#define MODE_AUTO   0u  // Wait orders and scenarios from the Raspberry pi through USB (UART)
-#define MODE_MANUAL 1u  // Use the 2 trimpots to describe the motion
-//#define MODE_START  MODE_MANUAL // tells the program which mode should be enabled when starting
-#define MODE_START  MODE_AUTO // tells the program which mode should be enabled when starting
 
 
-// Trimpot pins
-const uint8_t PIN_TRMPT_FREQ    = A0; // Analog input 3.3V
-const uint8_t PIN_TRMPT_AMPL    = A1; // Analog input 3.3V
+#define DEBOUNCE_TIME 400 // millisecond button debouncing time
+#define NBR_BTN_ISR     4 // how many ISR-enabled buttons 
+
+#define PIN_BTN_CONT 18 // Also TX1, ISR 5, Continue
+#define PIN_BTN_STRT 19 // Also RX1, ISR 4, Start
+#define PIN_BTN_ABRT 2  // ISR 0, Abort
+#define PIN_BTN_RPT  3  // ISR 1, Repeat
+
+#define INDX_BTN_CONT 0
+#define INDX_BTN_STRT 1
+#define INDX_BTN_ABRT 2
+#define INDX_BTN_RPT  3
 
 
-
+// ISR states
+//-----------
+#define TRIGGERED     true
+#define UNTRIGGERED   false
 
 // -------------------------- Global variables ----------------
-bool isLEDOn = false;
 
-volatile bool           flagMode            = false;
-volatile unsigned long  last_interrupt_time = 0;
+volatile bool isrFlag[NBR_BTN_ISR] = {UNTRIGGERED};  // Start with no switch press pending, ie false (!triggered)
 
-// Mode handling
-//uint8_t crnt_Mode = MODE_MANUAL;
-//uint8_t prev_Mode = MODE_MANUAL;
+volatile unsigned long  last_interrupt_time[NBR_BTN_ISR] = {0u};
 
-
-// -------------------------- ISR ----------------
+// -------------------------- ISR  [4]----------------
 
 //******************************************************************************************
-void toggleSwitchModeISR()
+void isrBTNContinue()
 {
-  noInterrupts();
+  noInterrupts(); // stops the system from generating any other ISRs
   unsigned long interrupt_time = millis();
   // If interrupts come faster than LS_DEBOUNCE_TIME, assume it's a bounce and ignore
-  if (interrupt_time - last_interrupt_time > DEBOUNCE_TIME)
+  if (interrupt_time - last_interrupt_time[INDX_BTN_CONT] > DEBOUNCE_TIME)
   {
-    flagMode = true;
+    isrFlag[INDX_BTN_CONT] = TRIGGERED;
     //digitalWrite(LED_BUILTIN, digitalRead(BUTTON));
   }
-  last_interrupt_time = interrupt_time;
-  interrupts();
+  last_interrupt_time[INDX_BTN_CONT] = interrupt_time;
+  interrupts(); // re-enables the ISRs
 }
-
 //******************************************************************************************
-void timerTrimpotISR()
+void isrBTNStart()
 {
-
-  /* NOTICE:
-*  Do NOT put noInterupts(); here because this is a low priority and long execution time "task"
-*  Limit switches IRS should be able to trigger in there
-*/
-
-  // Local variable declaration
-  //----------------------------
-  uint16_t sensorValue1 = 0;
-  uint16_t sensorValue2 = 0;
-
-
-  // Visual indication
-  //-------------------
-  digitalWrite(LED_BUILTIN, isLEDOn);
-  isLEDOn = !isLEDOn;
-
-  // Trimpot read and process
-  //-------------------------
-  
-  // read the input on analog pin 0:
-  sensorValue1 = analogRead(PIN_TRMPT_FREQ);
-
-
-  // read the input on analog pin 1:
-  sensorValue2 = analogRead(PIN_TRMPT_AMPL);
-
-
-  // Display (for  <DEBUG> only)
-  //----------------------------
-
-  Serial.print(sensorValue1);
-  Serial.print(" ");
-  Serial.println(sensorValue2);
-  
+  noInterrupts(); // stops the system from generating any other ISRs
+  unsigned long interrupt_time = millis();
+  // If interrupts come faster than LS_DEBOUNCE_TIME, assume it's a bounce and ignore
+  if (interrupt_time - last_interrupt_time[INDX_BTN_STRT] > DEBOUNCE_TIME)
+  {
+    isrFlag[INDX_BTN_STRT] = TRIGGERED;
+    //digitalWrite(LED_BUILTIN, digitalRead(BUTTON));
+  }
+  last_interrupt_time[INDX_BTN_STRT] = interrupt_time;
+  interrupts(); // re-enables the ISRs
 }
+//******************************************************************************************
+void isrBTNAbort()
+{
+  noInterrupts(); // stops the system from generating any other ISRs
+  unsigned long interrupt_time = millis();
+  // If interrupts come faster than LS_DEBOUNCE_TIME, assume it's a bounce and ignore
+  if (interrupt_time - last_interrupt_time[INDX_BTN_ABRT] > DEBOUNCE_TIME)
+  {
+    // Stop the motor and close all the valves
+    // stepper.stop() //Sets a new target position that causes the stepper to stop as quickly as possible, using the current speed and acceleration parameters.
+    // disable the stepper
+    
+    // 2
 
+    isrFlag[INDX_BTN_ABRT] = TRIGGERED;
+    //digitalWrite(LED_BUILTIN, digitalRead(BUTTON));
+  }
+  last_interrupt_time[INDX_BTN_ABRT] = interrupt_time;
+  interrupts(); // re-enables the ISRs
+}
+//******************************************************************************************
+void isrBTNRepeat()
+{
+  noInterrupts(); // stops the system from generating any other ISRs
+  unsigned long interrupt_time = millis();
+  // If interrupts come faster than LS_DEBOUNCE_TIME, assume it's a bounce and ignore
+  if (interrupt_time - last_interrupt_time[INDX_BTN_RPT] > DEBOUNCE_TIME)
+  {
+    isrFlag[INDX_BTN_RPT] = TRIGGERED;
+    //digitalWrite(LED_BUILTIN, digitalRead(BUTTON));
+  }
+  last_interrupt_time[INDX_BTN_RPT] = interrupt_time;
+  interrupts(); // re-enables the ISRs
+}
 
 // -------------------------- SetUp --------------------------
 void setup()
 {
 
+  pinMode(PIN_BTN_CONT, INPUT_PULLUP);
+  pinMode(PIN_BTN_STRT, INPUT_PULLUP);
+  pinMode(PIN_BTN_ABRT, INPUT_PULLUP);
+  pinMode(PIN_BTN_RPT , INPUT_PULLUP);
+
   Serial.begin(CONSOLE_BAUD_RATE);
-  pinMode(LED_BUILTIN, OUTPUT);
 
-  // initialize the LED pin as an output:
-
-  // initialize the pushbutton pin as an input
-  pinMode(PIN_TOGGLE_MODE, INPUT);
-  attachInterrupt(digitalPinToInterrupt(PIN_TOGGLE_MODE), toggleSwitchModeISR, CHANGE); //toggleSwitchModeISR
-
-  /* After this attachInterrupt, be careful not to toggle the
-  *  mode switch of the timers for the trimpots will never start
-  */
-
-  //if (MODE_START == MODE_MANUAL)
-  //
-  //{
-  //  #ifdef USE_TC3
-  //      TimerTc3.initialize(10000);
-  //      TimerTc3.attachInterrupt(timerTrimpotISR);
-  //  #else
-  //      TimerTcc0.initialize(10000); // 1e6 = 1s
-  //      TimerTcc0.attachInterrupt(timerTrimpotISR);
-  //  #endif
-  //}
-
-  // Enable the flag virtually, just once at the start as to read the location of the toggle switch
-  flagMode = true;
-
-
+  // initialize the pushbuttons pin as an input
+  attachInterrupt(digitalPinToInterrupt(PIN_BTN_CONT),
+                  isrBTNContinue,
+                  FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIN_BTN_STRT),
+                  isrBTNStart,
+                  FALLING); 
+  attachInterrupt(digitalPinToInterrupt(PIN_BTN_ABRT),
+                  isrBTNAbort,
+                  FALLING); 
+  attachInterrupt(digitalPinToInterrupt(PIN_BTN_RPT),
+                  isrBTNRepeat,
+                  FALLING);                                                   
 }
 
 
 // -------------------------- Loop --------------------------
 void loop()
 {
-  if (flagMode)
+  if (isrFlag[INDX_BTN_CONT]==TRIGGERED || isrFlag[INDX_BTN_STRT]==TRIGGERED || isrFlag[PIN_BTN_ABRT]==TRIGGERED || isrFlag[INDX_BTN_RPT]==TRIGGERED)
   {
-    flagMode = false; // Reset the flag immediatly
-
-    // Since the toggle switch ISR is triggered on
-    //  change, read the final and debounced state
-    if (digitalRead(PIN_TOGGLE_MODE) == MODE_MANUAL)
+    Serial.println(millis());
+    if(isrFlag[INDX_BTN_CONT]==TRIGGERED)
     {
-      // If we are in Manual, then attach the timer interrupt to read the trimpots
-      
-      #ifdef USE_TC3
-      TimerTc3.initialize(100000);
-      TimerTc3.attachInterrupt(timerTrimpotISR);
-      #else
-      TimerTcc0.initialize(10000); // 1e6 = 1s
-      TimerTcc0.attachInterrupt(timerTrimpotISR);
-      #endif
+      isrFlag[INDX_BTN_CONT]=UNTRIGGERED;// Reset the flag immediatly
+      Serial.println("Continue button pressed");
     }
-    else
+    if(isrFlag[INDX_BTN_STRT]==TRIGGERED)
     {
-      // If we are in Auto or (Scenario), then detach the
-      //  timer interrupt to stop reading the trimpots
-
-      #ifdef USE_TC3
-      TimerTc3.initialize(10000);
-      TimerTc3.detachInterrupt();
-      #else
-      TimerTcc0.initialize(10000); // 1e6 = 1s
-      TimerTcc0.detachInterrupt();
-      #endif
-      
+      isrFlag[INDX_BTN_STRT]=UNTRIGGERED;// Reset the flag immediatly
+      Serial.println("Start button pressed");
     }
-    
-    //Serial.print("Mode change with time: ");
-    //Serial.println(millis());
+    if(isrFlag[PIN_BTN_ABRT]==TRIGGERED)
+    {
+      isrFlag[PIN_BTN_ABRT]=UNTRIGGERED;// Reset the flag immediatly
+      Serial.println("Abort button pressed");
+    }
+    if(isrFlag[INDX_BTN_RPT]==TRIGGERED)
+    {
+      isrFlag[INDX_BTN_RPT]=UNTRIGGERED;// Reset the flag immediatly
+      Serial.println("Abort button pressed");
+    }    
   }
 }
+
+
+//END OF FILE
