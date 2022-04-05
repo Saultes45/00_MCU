@@ -63,27 +63,32 @@ static const char driverMode[]    = "StealthChop";  // changes with the CFG1+2 c
 
 // Personal MAX limits
 //--------------------
-const uint16_t personalMaxAccel = 900; //in [pulses/sec^2] so theo NOT dependent on uStepFactor
-const uint16_t personalMaxSpeed = 900; //in [pulses/sec] so theo NOT dependent on uStepFactor
+const float personalMaxAccel = 900; //in [pulses/sec^2] so theo NOT dependent on uStepFactor
+const float personalMaxSpeed = 900; //in [pulses/sec] so theo NOT dependent on uStepFactor
 
 // Dose/Clean pump parameters
 //---------------------------
 
 // REMOVE THE NEXT LINE
-const uint16_t targetAccel = personalMaxAccel; //in pulses/sec^2 so theo NOT dependent on uStepFactor
+const float targetAccel = personalMaxAccel; //in pulses/sec^2 so theo NOT dependent on uStepFactor
 //const uint8_t targetSpeed = 100; //in pulses/sec so theo NOT dependent on uStepFactor
 
 // Clean
-//const uint16_t cleanSpeed = personalMaxSpeed; // Do not use, in [pulses/sec]
-const uint16_t cleanAccel = personalMaxAccel; // in [pulses/sec^2]
+//const float cleanSpeed = personalMaxSpeed; // Do not use, in [pulses/sec]
+const float cleanAccel = personalMaxAccel; // in [pulses/sec^2]
 // Mix
-//const uint16_t mixSpeed = personalMaxSpeed; // Do not use, in [pulses/sec]
-const uint16_t mixAccel = (uint16_t)((float)personalMaxAccel * 2.0/3.0); // in [pulses/sec^2]
+//const float mixSpeed = personalMaxSpeed; // Do not use, in [pulses/sec]
+const float mixAccel = ((float)personalMaxAccel * 2.0/3.0); // in [pulses/sec^2]
 
 //Dose
-const uint16_t doseSpeed = 10; //  in [pulses/sec]
+const float doseSpeed = 10; //  in [pulses/sec]
 // TODO: accel in that case is for DEBUG ONLY, it should be 0
-const uint16_t doseAccel = 150; // Do not use, in [pulses/sec^2]
+// const float doseAccel = 150; // Do not use, in [pulses/sec^2]
+
+//Prime
+const float primeSpeed = 200; //  in [pulses/sec]
+// TODO: accel in that case is for DEBUG ONLY, it should be 0
+// const float doseAccel = 150; // Do not use, in [pulses/sec^2]
 
 // -------------------------- Global variables [1]----------------
 
