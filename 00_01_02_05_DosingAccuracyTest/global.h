@@ -58,8 +58,12 @@ void      infoDisplayOLED         (void);
 
 // Sequences
 void      attachISRs              (void);
+void      checkISRStates          (void);
 void      primePump               (void);
 void      dosePump                (void);
+
+void      disableStepper          (void);
+void      enableStepper           (void);
 
 
 
