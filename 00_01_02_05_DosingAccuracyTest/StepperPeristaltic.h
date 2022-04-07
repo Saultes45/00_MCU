@@ -59,7 +59,7 @@ const uint8_t PIN_MOTOR_CFG_3   = 6; // Digital output 5V - Doesn't matter
 const uint8_t pulsesPerRevolution = 200;  // Dictated by the HW only
 const uint8_t uStepFactor         = 4;    // set up by the MCU on the stepper driver, // changes with the CFG1+2 config
 const int interpolationFactor     = 256;            // changes with the CFG1+2 config
-static const char driverMode[]    = "StealthChop";  // changes with the CFG1+2 config
+static const char driverMode[]    = "StealthChop";  // changes with the CFG1+2 config , "StealthChop"
 
 // Personal MAX limits
 //--------------------
@@ -81,7 +81,7 @@ const float cleanAccel = personalMaxAccel; // in [pulses/sec^2]
 const float mixAccel = ((float)personalMaxAccel * 2.0/3.0); // in [pulses/sec^2]
 
 //Dose
-const float doseSpeed = 10; //  in [pulses/sec]
+const float doseSpeed = 50;//10; //  in [pulses/sec]
 // TODO: accel in that case is for DEBUG ONLY, it should be 0
 // const float doseAccel = 150; // Do not use, in [pulses/sec^2]
 
