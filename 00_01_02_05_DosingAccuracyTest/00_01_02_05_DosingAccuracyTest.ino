@@ -37,6 +37,11 @@
 // for all the sequencing
 #include "global.h"
 
+
+// for colorimeter
+#include "taosColorimeter.h"
+
+
 // for pump
 #include "StepperPeristaltic.h"
 
@@ -55,6 +60,7 @@
 // -------------------------- Defines and Const []--------------------------
 
 
+
 const uint8_t nbr_rollers = 7; // This is HW, cannot be changed
 //const uint16_t target_nbr_rollerTurns = nbr_rollers; // choose how much luiquid is dosed
 
@@ -62,9 +68,9 @@ const uint8_t nbr_rollers = 7; // This is HW, cannot be changed
 
 const long stepperDirection = 1;// to invert direction if needed, -1 and +1 allowed only
 
-const float prime_target_nbr_revolutions = 7.0 / (float)(nbr_rollers);
+const float prime_target_nbr_revolutions = 25.0 / (float)(nbr_rollers);
 
-const float dose_target_nbr_revolutions = 1.0 / (float)(nbr_rollers);
+const float dose_target_nbr_revolutions = 14.0 / (float)(nbr_rollers);
 
 
 // -------------------------- Global variables [3]----------------
@@ -212,6 +218,14 @@ void loop()
         isPrimed = true;
       }
 
+      if (doseInProgress)
+      {
+        printDebugln("Dosing done!");
+        doseInProgress = false;
+      }
+
+      
+
       // Just to be safe (not required) reset some boolean states
       needPrime = false;
       needDose  = false;
@@ -283,11 +297,33 @@ void pinSetUp(void) {
   //+--------------+-----------+----------------------------+---------------------------------------+
   //  
 
-  pinMode(PIN_MOTOR_CFG_1, INPUT); // for HiZ
-  pinMode(PIN_MOTOR_CFG_2, OUTPUT);
+  // pinMode(PIN_MOTOR_CFG_1, INPUT); // for HiZ
+  // pinMode(PIN_MOTOR_CFG_2, OUTPUT);
 
-  //  digitalWrite(PIN_MOTOR_CFG_1,LOW); // 4/256 StealthChop
-  digitalWrite(PIN_MOTOR_CFG_2, HIGH); // 4/256 StealthChop
+  // //  digitalWrite(PIN_MOTOR_CFG_1,LOW); // 4/256 StealthChop
+  // digitalWrite(PIN_MOTOR_CFG_2, HIGH); // 4/256 StealthChop
+
+
+
+  // pinMode(PIN_MOTOR_CFG_1, OUTPUT);
+  // pinMode(PIN_MOTOR_CFG_2, OUTPUT);
+
+  // digitalWrite(PIN_MOTOR_CFG_1,LOW); // 1/N/A SpreadCycle
+  // digitalWrite(PIN_MOTOR_CFG_2,LOW); // 1/N/A SpreadCycle
+
+
+
+  //  pinMode(PIN_MOTOR_CFG_1, OUTPUT);
+  // pinMode(PIN_MOTOR_CFG_2, OUTPUT);
+
+  // digitalWrite(PIN_MOTOR_CFG_1,HIGH); // 16/N/A SpreadCycle
+  // digitalWrite(PIN_MOTOR_CFG_2,HIGH); // 16/N/A SpreadCycle
+
+  // 4/256 StealthChop
+  pinMode(PIN_MOTOR_CFG_1, OUTPUT);
+  pinMode(PIN_MOTOR_CFG_2, INPUT);
+  digitalWrite(PIN_MOTOR_CFG_1,HIGH);
+  //digitalWrite(PIN_MOTOR_CFG_2,HIGH);
 
   // RGB LED colorimeter
   #ifdef USE_RGB_LED
@@ -500,29 +536,42 @@ void checkISRStates(void) {
     if(isrFlag[INDX_BTN_CONT]==TRIGGERED)
     {
       isrFlag[INDX_BTN_CONT]=UNTRIGGERED;// Reset the flag immediatly
-      #ifdef USE_BUZZER
-      cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
-      #endif
-      printDebugln("Continue button pressed");
+      
+
+      if (!primeInProgress && !doseInProgress) // if a action is happening, do not interrupt it
+      {
+        #ifdef USE_BUZZER
+        cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
+        #endif
+        printDebugln("Continue button pressed");
+        printDebugln("No action associated with this button");
+      }
+
     }
     /////////////////// START ///////////////////
     if(isrFlag[INDX_BTN_STRT]==TRIGGERED)
     {
       isrFlag[INDX_BTN_STRT]=UNTRIGGERED;// Reset the flag immediatly
-      #ifdef USE_BUZZER
-      cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
-      #endif
-      printDebugln("Start button pressed");
+      
+      if (!primeInProgress && !doseInProgress) // if a action is happening, do not interrupt it
+      {
+        #ifdef USE_BUZZER
+        cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
+        #endif
+        printDebugln("Start button pressed");
+        printDebugln("Priming asked");
 
-      // Bolean states
-      //--------------
-      isPrimed  = false;
-      //
-      needPrime = true;
-      needDose  = false;
-      needPump  = false; // for any pump movement (dose or prime)
-      primeInProgress = false; // just a safety
-      //doseInProgress = false;
+        // Bolean states
+        //--------------
+        isPrimed  = false;
+        //
+        needPrime = true;
+        needDose  = false;
+        needPump  = false; // for any pump movement (dose or prime)
+        primeInProgress = false; // just a safety
+        doseInProgress = false;
+      }
+
     }
     /////////////////// CONTINUE ///////////////////
     if(isrFlag[PIN_BTN_ABRT]==TRIGGERED)
@@ -544,7 +593,7 @@ void checkISRStates(void) {
       primeInProgress = false; // reset the flag after check
       needDose  = false;
       needPump  = false; // for any pump movement (dose or prime)
-      //doseInProgress = false;
+      doseInProgress = false;
       
       #ifdef USE_BUZZER
       cute.play(S_SAD           ); // Abort button presed
@@ -554,10 +603,27 @@ void checkISRStates(void) {
     if(isrFlag[INDX_BTN_RPT]==TRIGGERED)
     {
       isrFlag[INDX_BTN_RPT]=UNTRIGGERED;// Reset the flag immediatly
-      #ifdef USE_BUZZER
-      cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
-      #endif
-      printDebugln("Repeat button pressed");
+      
+      if (!primeInProgress && !doseInProgress) // if a action is happening, do not interrupt it
+      {
+        #ifdef USE_BUZZER
+        cute.play(S_CONNECTION  ); // button pressed (Start-repeat-Continue)
+        #endif
+        printDebugln("Repeat button pressed");
+        printDebugln("Dosing asked");
+
+        // Bolean states
+        //--------------
+        // isPrimed  = false;
+        //
+        needPrime = false;
+        needDose  = true;
+        needPump  = false; // for any pump movement (dose or prime)
+        primeInProgress = false; // just a safety
+        doseInProgress = true;
+
+      }
+
     }    
   }
 
@@ -611,6 +677,8 @@ void primePump(void) {
   // if defined then we need to enable NOW (for each movement)
     enableStepper();
   #endif
+
+  delay(1000);
   
   // // Set up stepper parameters
   // stepper.setMaxSpeed(1000);
@@ -639,7 +707,7 @@ void primePump(void) {
   needPrime = false; // reset the flag
   primeInProgress = true;
   needDose = false;
-  //doseInProgress = false;
+  doseInProgress = false;
 
   printDebugln("And here... we... go... !");
   
@@ -652,10 +720,13 @@ void dosePump(void) {
   
   printDebugln("Dosing requested");
 
+
   #ifdef DISABLE_PUMP_AFTER_RUN 
   // if defined then we need to enable NOW (for each movement)
     enableStepper();
   #endif
+
+  // delay(2000);
   
   // // Set up stepper parameters
   // stepper.setMaxSpeed(1000);
@@ -685,8 +756,6 @@ void dosePump(void) {
   primeInProgress = false;
   needDose = false;// reset the flag
   doseInProgress = true;
-
-  needDose = false; // reset the flag
 
   printDebugln("And here... we... go... !");
   
