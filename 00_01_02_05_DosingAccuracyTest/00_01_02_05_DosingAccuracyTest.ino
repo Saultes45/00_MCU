@@ -39,7 +39,7 @@
 
 
 // for colorimeter
-#include "taosColorimeter.h"
+//#include "taosColorimeter.h"
 
 
 // for pump
