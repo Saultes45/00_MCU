@@ -81,12 +81,12 @@ const float cleanAccel = personalMaxAccel; // in [pulses/sec^2]
 const float mixAccel = ((float)personalMaxAccel * 2.0/3.0); // in [pulses/sec^2]
 
 //Dose
-const float doseSpeed = 50;//10; //  in [pulses/sec]
+const float doseSpeed = 50.0;//10; //  in [pulses/sec]
 // TODO: accel in that case is for DEBUG ONLY, it should be 0
 // const float doseAccel = 150; // Do not use, in [pulses/sec^2]
 
 //Prime
-const float primeSpeed = 200; //  in [pulses/sec]
+const float primeSpeed = 200.0; //  in [pulses/sec]
 // TODO: accel in that case is for DEBUG ONLY, it should be 0
 // const float doseAccel = 150; // Do not use, in [pulses/sec^2]
 
