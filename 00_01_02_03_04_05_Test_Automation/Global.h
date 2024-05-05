@@ -96,15 +96,15 @@ void attachISRs (void)
 *  For each we want to know when it is
 *  triggered and released
 */
-	attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_RIGHT), LS_r_ISR, CHANGE);
-	attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_LEFT), LS_l_ISR, CHANGE);
+	// attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_RIGHT), LS_r_ISR, CHANGE);
+	// attachInterrupt(digitalPinToInterrupt(PIN_LIMIT_LEFT), LS_l_ISR, CHANGE);
 
   // Reset the time when the last LS interrupt was triggered (reference)
   last_interrupt_time_ls_r = millis();
   last_interrupt_time_ls_l = millis();
 
 	// To trigger an action when the switch is pressed
-	attachInterrupt(digitalPinToInterrupt(PIN_TOGGLE_MODE), toggleSwitchModeISR, CHANGE); 
+	//attachInterrupt(digitalPinToInterrupt(PIN_TOGGLE_MODE), toggleSwitchModeISR, CHANGE); 
 
 #ifdef SERIAL_VERBOSE
 	delay(250);

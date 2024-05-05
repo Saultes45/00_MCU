@@ -30,7 +30,7 @@
 // -------------------------- Includes --------------------------
 
 // Stepper motor
-#include <AccelStepper.h>
+#include <AccelStepper.h> // Mike McCauley https://www.airspayce.com/mikem/arduino/AccelStepper/
 
 // -------------------------- Defines --------------------------
 
